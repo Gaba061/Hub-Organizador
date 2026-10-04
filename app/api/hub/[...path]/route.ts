@@ -3,9 +3,12 @@ import {after} from 'next/server';
 import {getChatGPTUser} from '@/app/chatgpt-auth';
 import {handleHub} from '@/lib/hub-service';
 import {handleCertificates} from '@/lib/certificate-service';
+import {authorizeHubOwner} from '@/lib/hub-access';
 export const dynamic='force-dynamic';
 async function handler(request:Request){
  const user=await getChatGPTUser();
+ const denied=authorizeHubOwner(user?.userId||null,env.HUB_OWNER_USER_ID);
+ if(denied)return denied;
  const path=new URL(request.url).pathname;
  if(path.startsWith('/api/hub/certificates'))return handleCertificates(request,{db:env.DB,bucket:env.BUCKET,user:user?.userId||null});
  const dailyLimit=Number(env.AI_DAILY_REQUEST_LIMIT);

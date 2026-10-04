@@ -1,5 +1,6 @@
 declare namespace Cloudflare {
   interface Env {
+    HUB_OWNER_USER_ID?: string;
     DB?: D1Database;
     BUCKET?: R2Bucket;
 		OPENAI_API_KEY?: string;
