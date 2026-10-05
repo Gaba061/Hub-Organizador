@@ -28,8 +28,8 @@ export async function handleHub(request:Request,ctx:Context):Promise<Response>{
  // Recover executions abandoned by a worker restart without reissuing provider calls.
  await db.prepare("UPDATE runs SET status='failed',error='A resposta foi interrompida. Você pode tentar novamente.',finished_at=? WHERE user_id=? AND status='running' AND created_at<?").bind(now(),user,new Date(Date.now()-60000).toISOString()).run();
  if(parts[0]==='export'&&method==='GET'){
-  const conversations=await db.prepare('SELECT * FROM conversations WHERE user_id=? ORDER BY created_at').bind(user).all();
-  const messages=await db.prepare('SELECT m.* FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.user_id=? ORDER BY m.seq').bind(user).all();
+  const conversations=await db.prepare('SELECT * FROM conversations WHERE user_id=? AND deleted_at IS NULL ORDER BY created_at').bind(user).all();
+  const messages=await db.prepare('SELECT m.* FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.user_id=? AND c.deleted_at IS NULL ORDER BY m.seq').bind(user).all();
   return new Response(JSON.stringify({format:'gabriel-ai-hub',version:1,exportedAt:now(),conversations:conversations.results,messages:messages.results},null,2),{headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="gabriel-ai-hub-conversas.json"','Cache-Control':'no-store'}});
  }
  if(parts[0]!=='conversations')throw new Fault(404,'Página não encontrada.');
@@ -40,7 +40,7 @@ export async function handleHub(request:Request,ctx:Context):Promise<Response>{
   try{body=JSON.parse(raw);if(!body||typeof body!=='object'||Array.isArray(body))throw Error();}catch{throw new Fault(400,'Solicitação inválida.');}
  }
  if(parts.length===1){
-  if(method==='GET')return reply({conversations:(await db.prepare('SELECT id,agent_id,title,updated_at FROM conversations WHERE user_id=? ORDER BY updated_at DESC LIMIT 200').bind(user).all()).results});
+  if(method==='GET')return reply({conversations:(await db.prepare('SELECT id,agent_id,title,updated_at FROM conversations WHERE user_id=? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 200').bind(user).all()).results});
   if(method==='POST'){
    if(!agents.some(a=>a.id===body.agentId)||!uuid(body.id))throw new Fault(400,'Escolha um agente válido.');
    const existing=await db.prepare('SELECT user_id,agent_id FROM conversations WHERE id=?').bind(body.id).first<{user_id:string;agent_id:string}>();
@@ -49,10 +49,23 @@ export async function handleHub(request:Request,ctx:Context):Promise<Response>{
   }
  }
  const id=parts[1];if(!uuid(id))throw new Fault(404,'Conversa não encontrada.');
- const conv=await db.prepare('SELECT * FROM conversations WHERE id=? AND user_id=?').bind(id,user).first<Conv>();
+ const conv=await db.prepare('SELECT * FROM conversations WHERE id=? AND user_id=? AND deleted_at IS NULL').bind(id,user).first<Conv>();
  if(!conv)throw new Fault(404,'Conversa não encontrada.');
  const snapshot=async()=>({messages:(await db.prepare('SELECT id,role,content,created_at FROM messages WHERE conversation_id=? ORDER BY seq').bind(id).all()).results,run:await db.prepare('SELECT id,status,error FROM runs WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1').bind(id).first()});
  if(parts.length===2&&method==='GET')return reply(await snapshot());
+ if(parts.length===2&&method==='DELETE'){
+  const running=await db.prepare("SELECT id FROM runs WHERE conversation_id=? AND status='running'").bind(id).first();
+  if(running)throw new Fault(409,'Interrompa a resposta antes de apagar a conversa.');
+  // Keep request keys and charged attempts to prevent quota reset and replay.
+  await db.batch([
+   db.prepare("UPDATE conversations SET deleted_at=?,title='Conversa apagada',updated_at=? WHERE id=? AND user_id=? AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM runs WHERE conversation_id=? AND status='running')").bind(now(),now(),id,user,id),
+   db.prepare("UPDATE messages SET content='' WHERE conversation_id=? AND EXISTS (SELECT 1 FROM conversations WHERE id=? AND deleted_at IS NOT NULL)").bind(id,id),
+   db.prepare('UPDATE runs SET error=NULL WHERE conversation_id=? AND EXISTS (SELECT 1 FROM conversations WHERE id=? AND deleted_at IS NOT NULL)').bind(id,id),
+  ]);
+  const deleted=await db.prepare('SELECT deleted_at FROM conversations WHERE id=? AND user_id=?').bind(id,user).first<{deleted_at:string|null}>();
+  if(!deleted?.deleted_at)throw new Fault(409,'Interrompa a resposta antes de apagar a conversa.');
+  return reply({deleted:true});
+ }
  const action=parts[2];
  if(action==='cancel'&&method==='POST'){
   await db.prepare("UPDATE runs SET status='cancelled',error='Resposta interrompida por você.',finished_at=? WHERE conversation_id=? AND user_id=? AND status='running'").bind(now(),id,user).run();return reply(await snapshot());
@@ -85,9 +98,9 @@ export async function handleHub(request:Request,ctx:Context):Promise<Response>{
  // The quota check and running-user uniqueness are part of the same atomic batch.
  // A NULL status violates NOT NULL and rolls the entire operation back at the quota.
  batch.push(db.prepare(`INSERT INTO runs(id,conversation_id,user_id,message_id,request_key,agent_version,model,status,error,charged_attempt,created_at)
- VALUES(?,?,?,?,?,?,?,CASE WHEN ?=0 THEN 'failed' WHEN (SELECT COALESCE(SUM(charged_attempt),0) FROM runs WHERE user_id=? AND created_at>=?) < ? THEN 'running' ELSE NULL END,?,?,?)`).bind(runId,id,user,messageId,body.key,AGENT_VERSION,ctx.config?.model||null,ctx.config?1:0,user,date.slice(0,10)+'T00:00:00.000Z',ctx.dailyLimit,ctx.config?null:'Mensagem salva. Conecte a IA para receber uma resposta.',ctx.config?1:0,date));
+ VALUES(?,?,?,?,?,?,?,CASE WHEN (SELECT deleted_at FROM conversations WHERE id=?) IS NOT NULL THEN NULL WHEN ?=0 THEN 'failed' WHEN (SELECT COALESCE(SUM(charged_attempt),0) FROM runs WHERE user_id=? AND created_at>=?) < ? THEN 'running' ELSE NULL END,?,?,?)`).bind(runId,id,user,messageId,body.key,AGENT_VERSION,ctx.config?.model||null,id,ctx.config?1:0,user,date.slice(0,10)+'T00:00:00.000Z',ctx.dailyLimit,ctx.config?null:'Mensagem salva. Conecte a IA para receber uma resposta.',ctx.config?1:0,date));
  batch.push(db.prepare("UPDATE conversations SET updated_at=?, title=CASE WHEN title='Nova conversa' THEN ? ELSE title END WHERE id=? AND user_id=?").bind(date,content.slice(0,70),id,user));
- try{await db.batch(batch);}catch(e){const duplicate=await db.prepare('SELECT id FROM runs WHERE user_id=? AND request_key=?').bind(user,body.key).first();if(duplicate)return reply(await snapshot());throw new Fault(409,'O limite diário foi atingido ou existe outra resposta em andamento. Sua mensagem não foi enviada.');}
+ try{await db.batch(batch);}catch{const duplicate=await db.prepare('SELECT id FROM runs WHERE user_id=? AND request_key=?').bind(user,body.key).first();if(duplicate)return reply(await snapshot());throw new Fault(409,'O limite diário foi atingido ou existe outra resposta em andamento. Sua mensagem não foi enviada.');}
  if(ctx.config){const task=executeRun(ctx,conv,runId);ctx.defer(task);}
  return reply(await snapshot(),202);
  }catch(e){if(e instanceof Fault)return reply({error:e.message},e.code);console.error('Hub request failed',e instanceof Error?e.name:'Error');return reply({error:'Não foi possível acessar o histórico. Tente novamente; seu texto permanece no campo.'},503);}
@@ -118,4 +131,3 @@ async function executeRun(ctx:Context,conv:Conv,runId:string){
   try{await db.prepare("UPDATE runs SET status='failed',error=?,finished_at=? WHERE id=? AND status='running'").bind(message,now(),runId).run();}catch{console.error('Hub execution persistence failed');}
  }finally{clearTimeout(timeout);if(poll)clearInterval(poll);}
 }
-

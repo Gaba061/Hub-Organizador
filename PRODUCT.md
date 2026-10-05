@@ -33,7 +33,7 @@ Gabriel utiliza o Hub como espaço pessoal para conversar com agentes, organizar
 - O usuário quer flexibilidade para equilibrar desempenho, privacidade e baixo custo conforme a necessidade, mantendo aberta a escolha do provedor e do modelo de IA.
 - A configuração de IA/API não deve ser tratada como requisito para organizar o restante do Hub.
 - A execução dos agentes de IA acontece no n8n e chega ao Hub por uma camada server-side própria; a URL do webhook e o segredo opcional ficam somente na configuração de runtime.
-- A integração inicial já cobre as quatro rotas, memória persistente, histórico idempotente e confirmação explícita de memórias. O próximo trabalho é validar a experiência no Hub e, depois, adicionar canais externos.
+- O gateway atual cobre os quatro agentes e o histórico idempotente no Hub. Memória persistente e confirmação explícita de memórias no n8n permanecem pendentes de validação do workflow exportado e da implementação no Hub.
 - O projeto de divulgação será separado no futuro e não deve orientar a experiência privada atual.
 
 ## Brand Commitments

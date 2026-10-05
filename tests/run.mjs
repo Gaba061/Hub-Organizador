@@ -10,3 +10,6 @@ await import('./service.test.mjs');
 await import('./certificate.test.mjs');
 await import('./search.test.mjs');
 await import('./hub-access.test.mjs');
+await import('./provider-config.test.mjs');
+await import('./n8n-workflow.test.mjs');
+

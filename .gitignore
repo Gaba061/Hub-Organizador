@@ -47,5 +47,15 @@ next-env.d.ts
 /outputs/
 /work/
 
-*.tsbuildinfo
+# Local design workbench and historical deployment artifacts are not Site source.
+/.impeccable/
+/deploy-archive-*/
+/gabriel-ai-hub-deploy-*.tar
+/organized-hub-deploy-*.tar
+/git-index-*
+/git-objects-*/
 
+# Separate personal portfolio project; keep it out of Organized Hub publishing.
+/portfolio-site/
+
+*.tsbuildinfo

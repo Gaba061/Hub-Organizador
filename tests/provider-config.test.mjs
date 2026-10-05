@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+const {resolveProviderConfig}=await import('../lib/provider-config.ts').catch(()=>({}));
+assert.equal(typeof resolveProviderConfig,'function');
+const openai={OPENAI_API_KEY:'test-only',OPENAI_MODEL:'test-model'};
+assert.equal(resolveProviderConfig({...openai,AI_PROVIDER:'n8n'}),null);
+assert.equal(resolveProviderConfig({...openai,AI_PROVIDER:'ollama',OLLAMA_BASE_URL:'https://external.test',OLLAMA_MODEL:'test'}),null);
+assert.equal(resolveProviderConfig({...openai,AI_PROVIDER:'unknown'}),null);
+assert.equal(resolveProviderConfig({...openai,AI_PROVIDER:'openai'}).kind,'openai');
+assert.equal(resolveProviderConfig(openai).kind,'openai');
+assert.equal(resolveProviderConfig({AI_PROVIDER:'n8n',N8N_WEBHOOK_URL:'https://n8n.test/webhook/hub'}).kind,'n8n');
+assert.equal(resolveProviderConfig({AI_PROVIDER:'ollama',OLLAMA_BASE_URL:'http://127.0.0.1:11434',OLLAMA_MODEL:'test'}).kind,'ollama');
+console.log('PASS: explicit provider never falls back to another provider');

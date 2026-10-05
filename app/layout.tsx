@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "../public/katex/katex.min.css";
 
 export const metadata: Metadata = {
   title: "Organized Hub",
@@ -17,7 +18,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <head><link rel="stylesheet" href="/katex/katex.min.css" /></head>
       <body className="antialiased">{children}</body>
     </html>
   );
