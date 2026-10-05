@@ -1,0 +1,1473 @@
+{
+  "name": "Gabriel AI Hub — Roteador",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gabriel-ai-hub",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7963e419-a8ca-4b1f-a1a7-cbc4bdf50b58",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        128
+      ],
+      "webhookId": "d5981fd0-3b00-4b44-aa85-f47a551ed0d8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook').first()?.json?.body ?? {};\nconst action = (body.action ?? '').toString().trim().toLowerCase();\nconst isConfirm = action === 'confirmmemory';\n\nconst userId = (body.userId ?? '').toString().trim();\nconst conversationId = (body.conversationId ?? '').toString().trim();\nconst requestId = (body.requestId ?? '').toString().trim();\nconst message = (body.message ?? '').toString().trim();\n\nconst missing = [];\nif (!userId) missing.push('userId');\nif (!conversationId) missing.push('conversationId');\nif (!requestId) missing.push('requestId');\n// message so e obrigatorio para mensagens normais (nao para confirmMemory)\nif (!isConfirm && !message) missing.push('message');\n\nconst valid = missing.length === 0;\n\nreturn [{\n  json: {\n    valid,\n    isConfirm,\n    conversationId: conversationId || null,\n    errorMessage: valid ? '' : ('Campos obrigatorios ausentes ou invalidos: ' + missing.join(', '))\n  }\n}];"
+      },
+      "id": "a1f0c2d4-0e11-4c22-9b33-8d44e55f6a77",
+      "name": "Validar Requisição",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        80
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8c304768-e491-4b39-82b2-66e5012e02ef",
+      "name": "Requisição válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-confirm-memory",
+              "leftValue": "={{ $json.isConfirm }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ee693e5e-4ef8-4f8f-805f-1ad8a7f50556",
+      "name": "É confirmação de memória?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -448,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook').first()?.json?.body ?? {};\nconst userId = (body.userId ?? '').toString().trim();\nconst requestId = (body.requestId ?? ('exec-' + $execution.id)).toString();\nconst conversationId = (body.conversationId ?? 'conversation-not-defined').toString();\n\nconst raw = Array.isArray(body.confirmedMemories)\n  ? body.confirmedMemories\n  : (Array.isArray(body.memoryConfirmations) ? body.memoryConfirmations : []);\n\nlet userCount = 0;\nlet agentCount = 0;\nlet ignored = 0;\n\nif (!userId) {\n  return [{ json: { saved: { user: 0, agent: 0 }, ignored: raw.length } }];\n}\n\nfor (const m of raw) {\n  const content = (m?.content ?? m?.candidate ?? m?.text ?? '').toString().trim();\n  if (!content) { ignored++; continue; }\n  let scope = (m?.scope ?? (m?.agentId ? 'agent' : 'user')).toString().toLowerCase().trim();\n  if (scope !== 'agent') scope = 'user';\n  if (scope === 'agent' && !(m?.agentId ?? '').toString().trim()) { ignored++; continue; }\n  if (scope === 'agent') { agentCount++; } else { userCount++; }\n}\n\nreturn [{\n  json: {\n    saved: { user: userCount, agent: agentCount },\n    ignored\n  }\n}];"
+      },
+      "id": "fe9f29ef-7c74-4f72-8234-e5de15a611d7",
+      "name": "Montar Resposta Confirmação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        -128
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "90a2a459-bfd7-4096-bb68-87be36662d6f",
+      "name": "Responder Confirmação",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook').first()?.json?.body ?? {};\nconst userId = (body.userId ?? '').toString().trim();\n\n// Isolamento: sem userId nao grava nada.\nif (!userId) {\n  return [];\n}\n\nconst requestId = (body.requestId ?? ('exec-' + $execution.id)).toString();\nconst conversationId = (body.conversationId ?? 'conversation-not-defined').toString();\nconst now = new Date().toISOString();\n\n// Aceita apenas confirmacoes explicitas vindas do Hub.\nconst raw = Array.isArray(body.confirmedMemories)\n  ? body.confirmedMemories\n  : (Array.isArray(body.memoryConfirmations) ? body.memoryConfirmations : []);\n\nconst items = [];\nfor (const m of raw) {\n  if (!m) continue;\n  const content = (m.content ?? m.candidate ?? m.text ?? '').toString().trim();\n  if (!content) continue;\n  let scope = (m.scope ?? (m.agentId ? 'agent' : 'user')).toString().toLowerCase().trim();\n  if (scope !== 'agent') scope = 'user';\n  const agentId = scope === 'agent' ? (m.agentId ?? '').toString().toLowerCase().trim() : '';\n  // Memoria de agente exige agent_id.\n  if (scope === 'agent' && !agentId) continue;\n  const category = (m.category ?? '').toString();\n  items.push({\n    json: {\n      user_id: userId,\n      conversation_id: conversationId,\n      request_id: requestId,\n      scope,\n      agent_id: agentId,\n      candidate: content,\n      content,\n      category,\n      status: 'confirmed',\n      recorded_at: now\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "a02d7348-8f00-4f6e-9844-dc0b7540bd74",
+      "name": "Preparar Memórias Confirmadas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -32
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0GBIfKRkfun9zXOB",
+          "cachedResultName": "hub_memory_candidates"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_id",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $json.conversation_id }}"
+            },
+            {
+              "keyName": "request_id",
+              "keyValue": "={{ $json.request_id }}"
+            },
+            {
+              "keyName": "candidate",
+              "keyValue": "={{ $json.candidate }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "value": {
+            "user_id": "={{ $json.user_id }}",
+            "conversation_id": "={{ $json.conversation_id }}",
+            "agent_id": "={{ $json.agent_id }}",
+            "candidate": "={{ $json.candidate }}",
+            "status": "={{ $json.status }}",
+            "request_id": "={{ $json.request_id }}",
+            "recorded_at": "={{ $json.recorded_at }}"
+          },
+          "schema": [
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_id",
+              "displayName": "agent_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "candidate",
+              "displayName": "candidate",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "request_id",
+              "displayName": "request_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recorded_at",
+              "displayName": "recorded_at",
+              "required": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "50882f93-cca7-4784-955b-16b53639f277",
+      "name": "Registrar Candidato Confirmado",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.scope }}",
+                    "rightValue": "user",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "user"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.scope }}",
+                    "rightValue": "agent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "agent"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "baee7326-156c-402a-9f8d-73bf48a3efba",
+      "name": "Escopo da Memória",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "W5vMhnNgNBWyLtuo",
+          "cachedResultName": "hub_user_memory"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_id",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "request_id",
+              "keyValue": "={{ $json.request_id }}"
+            },
+            {
+              "keyName": "content",
+              "keyValue": "={{ $json.content }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "value": {
+            "user_id": "={{ $json.user_id }}",
+            "content": "={{ $json.content }}",
+            "category": "={{ $json.category }}",
+            "source": "memoryCandidate",
+            "request_id": "={{ $json.request_id }}",
+            "recorded_at": "={{ $json.recorded_at }}"
+          },
+          "schema": [
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "request_id",
+              "displayName": "request_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recorded_at",
+              "displayName": "recorded_at",
+              "required": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cf7b3179-5911-4614-a6e6-e222b4bab01e",
+      "name": "Gravar Memória Usuário",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "mLvODgllc64bVbWy",
+          "cachedResultName": "hub_agent_memory"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_id",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "agent_id",
+              "keyValue": "={{ $json.agent_id }}"
+            },
+            {
+              "keyName": "request_id",
+              "keyValue": "={{ $json.request_id }}"
+            },
+            {
+              "keyName": "content",
+              "keyValue": "={{ $json.content }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "value": {
+            "user_id": "={{ $json.user_id }}",
+            "agent_id": "={{ $json.agent_id }}",
+            "content": "={{ $json.content }}",
+            "category": "={{ $json.category }}",
+            "request_id": "={{ $json.request_id }}",
+            "recorded_at": "={{ $json.recorded_at }}"
+          },
+          "schema": [
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_id",
+              "displayName": "agent_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "request_id",
+              "displayName": "request_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recorded_at",
+              "displayName": "recorded_at",
+              "required": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "522e29d1-fc3e-4cc4-8e91-3864527821c5",
+      "name": "Gravar Memória Agente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "W5vMhnNgNBWyLtuo",
+          "cachedResultName": "hub_user_memory"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_id",
+              "keyValue": "={{ $('Webhook').first().json.body.userId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "5e0d8682-032d-411c-b624-0778702266f1",
+      "name": "Ler Memória Usuário",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -176,
+        16
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "mLvODgllc64bVbWy",
+          "cachedResultName": "hub_agent_memory"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_id",
+              "keyValue": "={{ $('Webhook').first().json.body.userId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "58c9f1fe-b5c3-4046-9fac-79b96140e426",
+      "name": "Ler Memória Agente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        48,
+        16
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook').first()?.json?.body ?? {};\n\nfunction realRows(items) {\n  return (items || [])\n    .map(i => i.json)\n    .filter(j => j && Object.keys(j).length > 0);\n}\n\nconst userRows = realRows($('Ler Memória Usuário').all());\nconst agentRows = realRows($('Ler Memória Agente').all());\n\nconst userParts = userRows\n  .map(r => (r.content || '').toString().trim())\n  .filter(Boolean);\n\nif (body.userMemory) {\n  userParts.push(typeof body.userMemory === 'string' ? body.userMemory : JSON.stringify(body.userMemory));\n}\n\nconst userMemoryText = userParts.join('; ');\n\nconst agentMap = {};\nfor (const r of agentRows) {\n  const aid = (r.agent_id || '').toString().toLowerCase().trim();\n  const c = (r.content || '').toString().trim();\n  if (!aid || !c) continue;\n  if (!agentMap[aid]) agentMap[aid] = [];\n  agentMap[aid].push(c);\n}\n\nconst agentMemoryByAgent = {};\nfor (const k of Object.keys(agentMap)) {\n  agentMemoryByAgent[k] = agentMap[k].join('; ');\n}\n\nreturn [\n  {\n    json: {\n      body,\n      message: body.message ?? '',\n      conversationId: body.conversationId ?? 'conversation-not-defined',\n      userId: body.userId ?? '',\n      userMemoryText,\n      agentMemoryByAgent,\n      userMemoryRowCount: userRows.length,\n      agentMemoryRowCount: agentRows.length\n    }\n  }\n];"
+      },
+      "id": "19f6d603-f943-4381-8141-03915c88536b",
+      "name": "Preparar Contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        16
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "agentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "92KQqHemcVuCRLP2",
+          "cachedResultName": "Orquestrador — Gabriel AI Hub"
+        },
+        "message": "={{ (() => { const c = $json; let m = c.message || ''; if (c.userMemoryText) { m += '\\n\\n[Memória do usuário]\\n' + c.userMemoryText; } return m; })() }}",
+        "advanced": {
+          "session": {
+            "session": {
+              "sessionIdType": "customKey",
+              "sessionKey": "={{ $('Webhook').first().json.body.conversationId }}"
+            }
+          }
+        }
+      },
+      "id": "c89ede08-b11a-49db-89e2-0208f95eb7cf",
+      "name": "Chamar Orquestrador",
+      "type": "n8n-nodes-base.messageAnAgent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst body = $('Webhook').first()?.json?.body ?? {};\n\nconst rawReply =\n  input.output ??\n  input.reply ??\n  input.text ??\n  input.response ??\n  \"\";\n\nfunction parseReply(value) {\n  if (typeof value === \"object\" && value !== null) {\n    return value;\n  }\n  if (typeof value !== \"string\") {\n    return {};\n  }\n  let cleaned = value.trim();\n  const fence = String.fromCharCode(96).repeat(3);\n  if (cleaned.startsWith(fence)) {\n    cleaned = cleaned.slice(fence.length).replace(/^json/i, \"\").trim();\n    if (cleaned.endsWith(fence)) {\n      cleaned = cleaned.slice(0, -fence.length).trim();\n    }\n  }\n  try {\n    return JSON.parse(cleaned);\n  } catch {\n    return {};\n  }\n}\n\nconst parsed = parseReply(rawReply);\n\nconst rawAgentId =\n  parsed.agentId ??\n  parsed.route ??\n  input.agentId ??\n  \"clarify\";\n\nconst agentId = String(rawAgentId).toLowerCase().trim();\n\nconst reply =\n  parsed.reply ??\n  parsed.answer ??\n  parsed.clarifyingQuestion ??\n  (typeof rawReply === \"string\" ? rawReply : \"\");\n\nreturn [\n  {\n    json: {\n      conversationId:\n        body.conversationId ??\n        input.conversationId ??\n        parsed.conversationId ??\n        \"conversation-not-defined\",\n\n      agentId,\n\n      message: body.message ?? \"\",\n      userId: body.userId ?? \"\",\n      userMemory: body.userMemory ?? null,\n      agentMemory: body.agentMemory ?? null,\n      attachments: Array.isArray(body.attachments) ? body.attachments : [],\n\n      reply,\n\n      memoryCandidates:\n        parsed.memoryCandidates ??\n        input.memoryCandidates ??\n        [],\n\n      citations:\n        parsed.citations ??\n        input.citations ??\n        [],\n\n      followUp:\n        parsed.followUp ??\n        input.followUp ??\n        \"\"\n    }\n  }\n];"
+      },
+      "id": "fd19ffb0-5945-4830-81c1-b03cc09b86be",
+      "name": "Interpretar Rota",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.agentId }}",
+                    "rightValue": "faculdade",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "faculdade"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.agentId }}",
+                    "rightValue": "concursos",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "concursos"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.agentId }}",
+                    "rightValue": "ipe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ipe"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.agentId }}",
+                    "rightValue": "carreira",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "carreira"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Outras rotas"
+        }
+      },
+      "id": "1679ebfe-7064-4587-817e-6ef838e3c493",
+      "name": "Rota do Agente",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst conversationId =\n  $('Webhook').first()?.json?.body?.conversationId ?? \"conversation-not-defined\";\n\nconst reply =\n  input.output ??\n  input.reply ??\n  input.text ??\n  input.response ??\n  \"\";\n\nreturn [\n  {\n    json: {\n      conversationId,\n      agentId: \"faculdade\",\n      reply,\n      memoryCandidates: [],\n      citations: [],\n      followUp: \"\"\n    }\n  }\n];"
+      },
+      "id": "ec303d70-5382-4954-bb19-e51909bf55c1",
+      "name": "Normalizar Resposta Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "daaa8ca1-830b-428e-bb4a-88298bb45244",
+      "name": "Responder ao Hub",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1344,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook').first()?.json?.body ?? {};\nconst resp = $input.first()?.json ?? {};\n\nconst userId = (body.userId ?? '').toString();\nconst conversationId = (resp.conversationId ?? body.conversationId ?? 'conversation-not-defined').toString();\nconst agentId = (resp.agentId ?? 'desconhecida').toString();\nconst userMessage = (body.message ?? '').toString();\nconst assistantReply = (resp.reply ?? '').toString();\nconst now = new Date().toISOString();\n\n// Idempotencia por evento: o Hub deve enviar um requestId unico por chamada.\n// Sem requestId, cai para o id da execucao (garante que user+assistant do\n// mesmo turno compartilhem a chave; um retry sem requestId ainda pode duplicar).\nconst requestId = (body.requestId ?? ('exec-' + $execution.id)).toString();\n\n// Nao grava sem userId (isolamento por usuario)\nif (!userId.trim()) {\n  return [];\n}\n\nconst rows = [];\nif (userMessage.trim()) {\n  rows.push({ role: 'user', message: userMessage });\n}\nif (assistantReply.trim()) {\n  rows.push({ role: 'assistant', message: assistantReply });\n}\n\nreturn rows.map(r => ({\n  json: {\n    user_id: userId,\n    conversation_id: conversationId,\n    request_id: requestId,\n    agent_id: agentId,\n    role: r.role,\n    message: r.message,\n    recorded_at: now\n  }\n}));"
+      },
+      "id": "ca3755df-8be8-452e-b790-2223fcd7bcf1",
+      "name": "Preparar Registros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "XcDr4eLZS2HiQrs6",
+          "cachedResultName": "hub_conversations"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_id",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $json.conversation_id }}"
+            },
+            {
+              "keyName": "request_id",
+              "keyValue": "={{ $json.request_id }}"
+            },
+            {
+              "keyName": "role",
+              "keyValue": "={{ $json.role }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "value": {
+            "user_id": "={{ $json.user_id }}",
+            "conversation_id": "={{ $json.conversation_id }}",
+            "request_id": "={{ $json.request_id }}",
+            "agent_id": "={{ $json.agent_id }}",
+            "role": "={{ $json.role }}",
+            "message": "={{ $json.message }}",
+            "recorded_at": "={{ $json.recorded_at }}"
+          },
+          "schema": [
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "request_id",
+              "displayName": "request_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_id",
+              "displayName": "agent_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recorded_at",
+              "displayName": "recorded_at",
+              "required": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "009a2f04-966b-44b6-9a66-a8e244fdd627",
+      "name": "Gravar Histórico",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2464,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "agentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "W65MsbSUmmy8nEAR",
+          "cachedResultName": "Concursos — Gabriel AI Hub"
+        },
+        "message": "={{ (() => { const c = $('Preparar Contexto').first().json; const b = c.body || {}; let ctx = b.message || ''; const um = c.userMemoryText || ''; const am = (c.agentMemoryByAgent && c.agentMemoryByAgent['concursos']) || ''; if (um) { ctx += '\\n\\n[Memória do usuário]\\n' + um; } if (am) { ctx += '\\n\\n[Memória do agente]\\n' + am; } if (Array.isArray(b.attachments) && b.attachments.length) { ctx += '\\n\\n[Anexos]\\n' + JSON.stringify(b.attachments); } return ctx; })() }}",
+        "advanced": {
+          "session": {
+            "session": {
+              "sessionIdType": "customKey",
+              "sessionKey": "={{ $('Webhook').first().json.body.conversationId }}"
+            }
+          }
+        }
+      },
+      "id": "75d56385-1797-46d7-852d-f198ac586184",
+      "name": "Chamar Concursos",
+      "type": "n8n-nodes-base.messageAnAgent",
+      "typeVersion": 3.1,
+      "position": [
+        1344,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst conversationId =\n  $('Webhook').first()?.json?.body?.conversationId ?? \"conversation-not-defined\";\n\nconst reply =\n  input.output ??\n  input.reply ??\n  input.text ??\n  input.response ??\n  \"\";\n\nreturn [\n  {\n    json: {\n      conversationId,\n      agentId: \"concursos\",\n      reply,\n      memoryCandidates: [],\n      citations: [],\n      followUp: \"\"\n    }\n  }\n];"
+      },
+      "id": "a463f33e-fead-4230-a68d-5c8cbb3f5aab",
+      "name": "Normalizar Resposta Concursos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "agentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "doTB6H0NAfLM1WDR",
+          "cachedResultName": "IPE Trading — Gabriel AI Hub"
+        },
+        "message": "={{ (() => { const c = $('Preparar Contexto').first().json; const b = c.body || {}; let ctx = b.message || ''; const um = c.userMemoryText || ''; const am = (c.agentMemoryByAgent && c.agentMemoryByAgent['ipe']) || ''; if (um) { ctx += '\\n\\n[Memória do usuário]\\n' + um; } if (am) { ctx += '\\n\\n[Memória do agente]\\n' + am; } if (Array.isArray(b.attachments) && b.attachments.length) { ctx += '\\n\\n[Anexos]\\n' + JSON.stringify(b.attachments); } return ctx; })() }}",
+        "advanced": {
+          "session": {
+            "session": {
+              "sessionIdType": "customKey",
+              "sessionKey": "={{ $('Webhook').first().json.body.conversationId }}"
+            }
+          }
+        }
+      },
+      "id": "f716ed7f-b971-4a87-b2cc-fc33bb665e50",
+      "name": "Chamar IPE Trading",
+      "type": "n8n-nodes-base.messageAnAgent",
+      "typeVersion": 3.1,
+      "position": [
+        1344,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst conversationId =\n  $('Webhook').first()?.json?.body?.conversationId ?? \"conversation-not-defined\";\n\nconst reply =\n  input.output ??\n  input.reply ??\n  input.text ??\n  input.response ??\n  \"\";\n\nreturn [\n  {\n    json: {\n      conversationId,\n      agentId: \"ipe\",\n      reply,\n      memoryCandidates: [],\n      citations: [],\n      followUp: \"\"\n    }\n  }\n];"
+      },
+      "id": "a6c299ce-d580-44ae-83db-6c37974716d1",
+      "name": "Normalizar Resposta IPE Trading",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "agentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "sUgNCpnh949vgdcf",
+          "cachedResultName": "Carreira & Tecnologia — Gabriel AI Hub"
+        },
+        "message": "={{ (() => { const c = $('Preparar Contexto').first().json; const b = c.body || {}; let ctx = b.message || ''; const um = c.userMemoryText || ''; const am = (c.agentMemoryByAgent && c.agentMemoryByAgent['carreira']) || ''; if (um) { ctx += '\\n\\n[Memória do usuário]\\n' + um; } if (am) { ctx += '\\n\\n[Memória do agente]\\n' + am; } if (Array.isArray(b.attachments) && b.attachments.length) { ctx += '\\n\\n[Anexos]\\n' + JSON.stringify(b.attachments); } return ctx; })() }}",
+        "advanced": {
+          "session": {
+            "session": {
+              "sessionIdType": "customKey",
+              "sessionKey": "={{ $('Webhook').first().json.body.conversationId }}"
+            }
+          }
+        }
+      },
+      "id": "693590d5-c09a-45b2-a359-d7a0f73318cc",
+      "name": "Chamar Carreira & Tecnologia",
+      "type": "n8n-nodes-base.messageAnAgent",
+      "typeVersion": 3.1,
+      "position": [
+        1344,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst conversationId =\n  $('Webhook').first()?.json?.body?.conversationId ?? \"conversation-not-defined\";\n\nconst reply =\n  input.output ??\n  input.reply ??\n  input.text ??\n  input.response ??\n  \"\";\n\nreturn [\n  {\n    json: {\n      conversationId,\n      agentId: \"carreira\",\n      reply,\n      memoryCandidates: [],\n      citations: [],\n      followUp: \"\"\n    }\n  }\n];"
+      },
+      "id": "c5d49661-705a-4a06-ac3a-e44040b60d4d",
+      "name": "Normalizar Resposta Carreira",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst body = $('Webhook').first()?.json?.body ?? {};\nconst agentId = input.agentId ?? \"desconhecida\";\n\nreturn [\n  {\n    json: {\n      conversationId:\n        input.conversationId ?? body.conversationId ?? \"conversation-not-defined\",\n      agentId,\n      reply:\n        \"A rota '\" + agentId + \"' nao e uma rota valida deste roteador. As rotas disponiveis sao: faculdade, concursos, ipe e carreira.\",\n      memoryCandidates: [],\n      citations: [],\n      followUp: \"\"\n    }\n  }\n];"
+      },
+      "id": "7fc6b740-98d0-4d15-95c1-2461856afa15",
+      "name": "Rota Não Conectada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"conversationId\": ($json.conversationId ?? null), \"agentId\": \"clarify\", \"reply\": \"\", \"error\": ($json.errorMessage || \"Requisição inválida.\"), \"memoryCandidates\": [], \"citations\": [], \"followUp\": \"\" } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "3095e6a1-89a2-430e-986f-d778c24833e7",
+      "name": "Responder Erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        192,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "agentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "S4yh1VaBkslh9CO5",
+          "cachedResultName": "Faculdade"
+        },
+        "message": "={{ $('Preparar Contexto').first().json.body.message || '' }}",
+        "advanced": {}
+      },
+      "type": "n8n-nodes-base.messageAnAgent",
+      "typeVersion": 3.1,
+      "position": [
+        1344,
+        832
+      ],
+      "id": "8555702f-b673-4195-b457-8705b061fcee",
+      "name": "Message an Agent"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Requisição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Requisição": {
+      "main": [
+        [
+          {
+            "node": "Requisição válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requisição válida?": {
+      "main": [
+        [
+          {
+            "node": "É confirmação de memória?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É confirmação de memória?": {
+      "main": [
+        [
+          {
+            "node": "Montar Resposta Confirmação",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ler Memória Usuário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Resposta Confirmação": {
+      "main": [
+        [
+          {
+            "node": "Responder Confirmação",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar Memórias Confirmadas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Memórias Confirmadas": {
+      "main": [
+        [
+          {
+            "node": "Registrar Candidato Confirmado",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Escopo da Memória",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escopo da Memória": {
+      "main": [
+        [
+          {
+            "node": "Gravar Memória Usuário",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gravar Memória Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Memória Usuário": {
+      "main": [
+        [
+          {
+            "node": "Ler Memória Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Memória Agente": {
+      "main": [
+        [
+          {
+            "node": "Preparar Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Contexto": {
+      "main": [
+        [
+          {
+            "node": "Chamar Orquestrador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamar Orquestrador": {
+      "main": [
+        [
+          {
+            "node": "Interpretar Rota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar Rota": {
+      "main": [
+        [
+          {
+            "node": "Rota do Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rota do Agente": {
+      "main": [
+        [
+          {
+            "node": "Message an Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chamar Concursos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chamar IPE Trading",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chamar Carreira & Tecnologia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rota Não Conectada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Resposta Final": {
+      "main": [
+        [
+          {
+            "node": "Responder ao Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder ao Hub": {
+      "main": [
+        [
+          {
+            "node": "Preparar Registros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Registros": {
+      "main": [
+        [
+          {
+            "node": "Gravar Histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamar Concursos": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Resposta Concursos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Resposta Concursos": {
+      "main": [
+        [
+          {
+            "node": "Responder ao Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamar IPE Trading": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Resposta IPE Trading",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Resposta IPE Trading": {
+      "main": [
+        [
+          {
+            "node": "Responder ao Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamar Carreira & Tecnologia": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Resposta Carreira",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Resposta Carreira": {
+      "main": [
+        [
+          {
+            "node": "Responder ao Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rota Não Conectada": {
+      "main": [
+        [
+          {
+            "node": "Responder ao Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message an Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Resposta Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c79d5560-a2b1-49ba-83b8-c5e5da206820",
+  "meta": {
+    "instanceId": "a3e7dfbe43e1d82853947b771d828f168871376a22209aa16e28d04aace18548"
+  },
+  "nodeGroups": [
+    {
+      "id": "2f6cf516-5aa9-4f19-b834-c557d396e297",
+      "name": "Validar requisição",
+      "nodeIds": [
+        "a1f0c2d4-0e11-4c22-9b33-8d44e55f6a77",
+        "8c304768-e491-4b39-82b2-66e5012e02ef"
+      ],
+      "description": "Valida userId, conversationId, requestId e message do Hub; devolve erro 400 em JSON quando algum campo obrigatório falta."
+    },
+    {
+      "id": "415d4eb9-34ad-407c-9cc4-843e02e06ef0",
+      "name": "Confirmar memórias",
+      "nodeIds": [
+        "fe9f29ef-7c74-4f72-8234-e5de15a611d7",
+        "90a2a459-bfd7-4096-bb68-87be36662d6f",
+        "a02d7348-8f00-4f6e-9844-dc0b7540bd74",
+        "50882f93-cca7-4784-955b-16b53639f277",
+        "baee7326-156c-402a-9f8d-73bf48a3efba",
+        "cf7b3179-5911-4614-a6e6-e222b4bab01e",
+        "522e29d1-fc3e-4cc4-8e91-3864527821c5"
+      ],
+      "description": "Quando o Hub envia confirmação explicita (action=confirmMemory), grava as memorias confirmadas em hub_user_memory/hub_agent_memory (idempotente p"
+    },
+    {
+      "id": "21d09c7f-32eb-44ad-bc42-0a462bd29305",
+      "name": "Preparar contexto e memória",
+      "nodeIds": [
+        "5e0d8682-032d-411c-b624-0778702266f1",
+        "58c9f1fe-b5c3-4046-9fac-79b96140e426",
+        "19f6d603-f943-4381-8141-03915c88536b"
+      ],
+      "description": "Le a memoria do usuario e dos agentes nas Data Tables (isolada por userId) e monta o contexto injetado nas chamadas."
+    },
+    {
+      "id": "9bcca864-e7ff-4e35-96c3-ee38437b5eda",
+      "name": "Rotear e responder",
+      "nodeIds": [
+        "c89ede08-b11a-49db-89e2-0208f95eb7cf",
+        "fd19ffb0-5945-4830-81c1-b03cc09b86be",
+        "1679ebfe-7064-4587-817e-6ef838e3c493",
+        "8555702f-b673-4195-b457-8705b061fcee",
+        "ec303d70-5382-4954-bb19-e51909bf55c1",
+        "75d56385-1797-46d7-852d-f198ac586184",
+        "a463f33e-fead-4230-a68d-5c8cbb3f5aab",
+        "f716ed7f-b971-4a87-b2cc-fc33bb665e50",
+        "a6c299ce-d580-44ae-83db-6c37974716d1",
+        "693590d5-c09a-45b2-a359-d7a0f73318cc",
+        "c5d49661-705a-4a06-ac3a-e44040b60d4d",
+        "7fc6b740-98d0-4d15-95c1-2461856afa15",
+        "daaa8ca1-830b-428e-bb4a-88298bb45244",
+        "ca3755df-8be8-452e-b790-2223fcd7bcf1",
+        "009a2f04-966b-44b6-9a66-a8e244fdd627"
+      ],
+      "description": "Consulta o orquestrador, decide a rota, chama o agente e devolve a resposta ao Hub; na rota Faculdade grava o historico em hub_conversations."
+    }
+  ],
+  "id": "Gd3TgFC1BhBpGtCD",
+  "tags": []
+}

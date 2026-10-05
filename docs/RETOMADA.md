@@ -31,7 +31,7 @@ O segredo HUB_OWNER_USER_ID existe no runtime e veio mascarado na consulta; valo
 - Provedor explícito incompleto não cai silenciosamente em OpenAI.
 - pnpm 11.25.0 e lockfile fixados; CI preparada para instalação limpa/testes/tipos/lint/build; fontes KaTeX e CSS vendorizado incluídos.
 - React/RSC 19.2.8, Next/eslint-config-next 16.3.8, Vite 8.0.16.
-- README e PRODUCT corrigidos: memória externa ainda não validada.
+- Export do workflow n8n recebido, preservado em `docs/n8n/gabriel-ai-hub-router.json` e validado por teste de contrato. A leitura e a confirmação de memória existem no workflow; a produção de candidatos ainda retorna lista vazia e a proteção por `X-Gabriel-Hub-Secret` ainda precisa ser configurada no n8n.
 
 ## Verificação atual
 
@@ -45,7 +45,7 @@ A política automática rejeitou o envio da credencial ao processo oficial de si
 
 1. Consultar o PR/CI desta retomada e concluir build em ambiente compatível. Corrigir falhas comprovadas antes de publicar.
 2. Validar desktop/celular: busca teclado/foco, tabs, Foco, abertura/retomada/cancelamento/exclusão, certificados e mensagem de erro de API.
-3. Receber exportação JSON do workflow n8n. O usuário disse que salvaria em work/n8n no chat atual; a pasta continua vazia. GitHub contém N8N_AGENT_PROMPTS.md, não o workflow. Validar rotas, autenticação, isolamento, requestId e contrato de memória antes de implementar confirmação. Não inferir suporte a partir de prompts.
+3. Configurar no n8n a validação de `X-Gabriel-Hub-Secret`, testar isolamento/idempotência e implementar a emissão de `memoryCandidates` antes de ativar a UX de confirmação no Hub. O export auditado e os limites estão em `docs/n8n/MEMORY-INTEGRATION.md`.
 4. Usar exclusivamente fluxo oficial Sites para sincronizar fonte, build, pacote, migrações e publicação. A versão 12 permanece em produção até isso.
 5. Preservar o projeto portfolio-site separado e ignorado; não incluí-lo no Hub.
 
@@ -61,3 +61,4 @@ Branch: codex/hub-recovery-2026-10-05.
 A primeira CI completou instalação limpa, testes, tipos, lint e build com sucesso: https://github.com/Gaba061/Hub-Organizador/actions/runs/37377135085.
 O ajuste final torna avisos de erro visíveis em todas as telas e importa o CSS KaTeX pelo layout, removendo o aviso de lint. Consultar os checks do commit final do PR antes da publicação.
 O bloqueio local de subprocessos permanece; CI não substitui revisão visual, validação do workflow n8n ou publicação oficial.
+
