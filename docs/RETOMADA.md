@@ -53,3 +53,11 @@ A política automática rejeitou o envio da credencial ao processo oficial de si
 
 Backups anteriores à reconciliação: C:/Users/Gaba/Documents/Codex/2026-10-05/continue-o-trabalho-do-chat-anterior/work/pre-reconciliation.
 Referência GitHub: pasta work/github-main do mesmo chat. Scripts reconcile.mjs/polish.mjs/fix-review.mjs já executados e não são idempotentes. Não executá-los novamente.
+
+## Entrega revisável
+
+PR em rascunho: https://github.com/Gaba061/Hub-Organizador/pull/1
+Branch: codex/hub-recovery-2026-10-05.
+A primeira CI completou instalação limpa, testes, tipos, lint e build com sucesso: https://github.com/Gaba061/Hub-Organizador/actions/runs/37377135085.
+O ajuste final torna avisos de erro visíveis em todas as telas e importa o CSS KaTeX pelo layout, removendo o aviso de lint. Consultar os checks do commit final do PR antes da publicação.
+O bloqueio local de subprocessos permanece; CI não substitui revisão visual, validação do workflow n8n ou publicação oficial.

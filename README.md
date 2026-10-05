@@ -4,7 +4,7 @@ Hub pessoal de Gabriel para Faculdade, Concursos, IPE Trading e Carreira & Tecno
 
 ## Estado recuperado em 05/10/2026
 
-O Site publicado está na versão 12. Este checkout reúne a busca dessa versão com correções posteriores de certificados, navegação móvel, foco e acessibilidade. As alterações desta retomada ainda precisam de build, revisão visual e publicação pelo fluxo oficial do Sites.
+O Site publicado está na versão 12. Este checkout reúne a busca dessa versão com correções posteriores de certificados, navegação móvel, foco e acessibilidade. A primeira CI passou com instalação limpa e build. Os checks do commit final devem estar verdes antes de publicação pelo fluxo oficial do Sites; revisão visual e integração do workflow n8n permanecem pendentes.
 
 Conversas e mensagens usam D1; certificados usam D1 e R2. Há exportação JSON, isolamento por usuário, acesso restrito ao proprietário, idempotência, limite diário e cancelamento. Exclusão remove o conteúdo da conversa e a oculta do histórico/exportação, preservando metadados técnicos de execução para impedir reutilização de chaves e reinício da cota. Uma execução ativa deve ser interrompida antes de apagar sua conversa.
 
@@ -25,7 +25,7 @@ pnpm dev
 
 A CI executa instalação limpa, testes, tipos, lint e build. Fontes KaTeX e CSS local do shadcn acompanham o código para não depender de arquivos existentes apenas no computador de origem. Scripts antigos de instalação npm não são o caminho configurado em install:ci.
 
-Nesta retomada, testes funcionais e de renderização e TypeScript passaram. Lint: zero erros, um aviso preexistente pelo link local do CSS KaTeX no layout. O build local falhou por bloqueio de subprocessos (spawn EPERM) antes de carregar a configuração Vite; não foi possível validar a interface em navegador. Isso permanece pendente até execução em um ambiente compatível.
+Nesta retomada, testes funcionais e de renderização e TypeScript passaram. O aviso de lint pelo link do CSS KaTeX foi corrigido usando import no layout; lint local passou sem erros ou avisos. O build local falhou por bloqueio de subprocessos (spawn EPERM) antes de carregar a configuração Vite; não foi possível validar a interface em navegador. A CI Linux completou o build; a revisão visual destas alterações permanece pendente.
 
 ## Acesso e banco
 
