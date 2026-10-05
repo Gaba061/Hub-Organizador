@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { sqliteTable, text, integer, index, uniqueIndex, check } from 'drizzle-orm/sqlite-core';
 export const conversations=sqliteTable('conversations',{
- id:text('id').primaryKey(),userId:text('user_id').notNull(),agentId:text('agent_id').notNull(),title:text('title').notNull(),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),
+ id:text('id').primaryKey(),userId:text('user_id').notNull(),agentId:text('agent_id').notNull(),title:text('title').notNull(),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),deletedAt:text('deleted_at'),
 },t=>[index('idx_conversations_user_updated').on(t.userId,t.updatedAt),check('valid_agent',sql`${t.agentId} in ('faculdade','concursos','ipe','carreira')`)]);
 export const messages=sqliteTable('messages',{
  seq:integer('seq').primaryKey({autoIncrement:true}),id:text('id').notNull().unique(),conversationId:text('conversation_id').notNull().references(()=>conversations.id,{onDelete:'cascade'}),role:text('role').notNull(),content:text('content').notNull(),createdAt:text('created_at').notNull(),
@@ -23,4 +23,3 @@ export const certificates=sqliteTable('certificates',{
  objectKey:text('object_key').notNull().unique(),
  createdAt:text('created_at').notNull(),
 },t=>[index('idx_certificates_user_created').on(t.userId,t.createdAt),check('valid_certificate_size',sql`${t.sizeBytes} > 0 and ${t.sizeBytes} <= 8388608`)]);
-

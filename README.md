@@ -1,69 +1,59 @@
 # Organized Hub
 
-Plataforma pessoal de Gabriel para Faculdade, Concursos, IPE Trading e Carreira & Tecnologia.
+Hub pessoal de Gabriel para Faculdade, Concursos, IPE Trading e Carreira & Tecnologia.
 
-## Estado da entrega
+## Estado recuperado em 05/10/2026
 
-MVP A implementado e publicado: painel responsivo, quatro configurações de agente, autenticação pelo Sites, conversas e mensagens em D1, retomada, exportação JSON, tratamento de falhas, idempotência, limite diário, cancelamento e motores intercambiáveis OpenAI/Ollama.
+O Site publicado está na versão 12. Este checkout reúne a busca dessa versão com correções posteriores de certificados, navegação móvel, foco e acessibilidade. As alterações desta retomada ainda precisam de build, revisão visual e publicação pelo fluxo oficial do Sites.
 
-Em 17/09/2026, a conexão local OpenAI foi configurada com chave aprovada, gpt-5.4-mini e 20 tentativas por dia. A chave autenticou, mas a geração real retornou credit_balance_exhausted: faltam créditos na API. O backend também aceita Ollama local, sem mudar os agentes ou o histórico. Em ambientes sem um motor configurado, a IA fica desativada e o aplicativo salva mensagens sem fabricar respostas. Memória permanente, anexos, pesquisa web, roteamento automático e personalização dos agentes pertencem às próximas etapas.
+Conversas e mensagens usam D1; certificados usam D1 e R2. Há exportação JSON, isolamento por usuário, acesso restrito ao proprietário, idempotência, limite diário e cancelamento. Exclusão remove o conteúdo da conversa e a oculta do histórico/exportação, preservando metadados técnicos de execução para impedir reutilização de chaves e reinício da cota. Uma execução ativa deve ser interrompida antes de apagar sua conversa.
 
-## Desenvolvimento
+Projetos, biblioteca geral e indicadores de foco são exemplos ou funções em preparação, identificados na interface. O histórico persistido no Hub não comprova memória permanente no n8n. O repositório contém prompts e o contrato do webhook, mas não contém o JSON exportado do workflow nem a integração de confirmação de memórias.
 
-Node >= 22.13. Use o gerenciador e lockfile existentes. `npm run dev` inicia a prévia. `npm run build` gera o Worker. `node tests/run.mjs` verifica os fluxos essenciais; `npx tsc --noEmit` verifica tipos.
+## Desenvolvimento e verificação
 
-O starter simula login apenas na prévia local. A publicação privada é protegida pelo controle de acesso do Sites. As rotas validam a identidade encaminhada pela plataforma e o proprietário da conversa. Não expor o Worker diretamente sem a camada de autenticação da plataforma.
+Use Node >=22.13 (CI: Node 24) e pnpm 11.25.0, fixado em packageManager. O pnpm-lock.yaml é a referência de instalação:
 
-## Banco
-
-Esquema em `db/schema.ts`. Migração inicial em `drizzle/`. Na prévia, aplicar as migrações pendentes via Wrangler usando `dist/server/wrangler.json` e `.wrangler/state`, depois do build. No Sites, migrações acompanham o pacote da versão.
-
-Uma execução ativa por usuário; unicidade de chave de envio por usuário. Reserva do limite, criação da mensagem e execução ocorrem na mesma transação. Repetir uma solicitação com a mesma chave não chama o provedor novamente. Cada execução registra a versão das instruções e o uso informado pelo provedor.
-
-## Ativação da IA
-
-Configurar no ambiente do Sites:
-- AI_PROVIDER: `openai` ou `ollama`.
-- OPENAI_API_KEY: segredo, nunca no navegador ou repositório.
-- OPENAI_MODEL: identificador de modelo acessível na conta.
-- OLLAMA_BASE_URL: endereço local permitido (`localhost` ou `127.0.0.1`).
-- OLLAMA_MODEL: modelo instalado, inicialmente sugerido `qwen3.5:4b`.
-- AI_DAILY_REQUEST_LIMIT: inteiro de 1 a 500; valor inicial local: 20, ajustável.
-
-O limite conta tentativas iniciadas, incluindo falhas após o início, por dia UTC. É um limite de quantidade, não de valor em dinheiro. O limite financeiro deve ser gerenciado separadamente na conta do provedor conforme necessário. Uma mudança de ambiente exige republicação.
-
-A skill de publicação orienta usar o plugin OpenAI Developers para criar/reutilizar a chave com aprovação do usuário. O plugin foi habilitado e a chave local foi criada com aprovação, sem exposição no chat. Não solicitar chave por mensagem de chat.
-
-O adaptador usa Responses API, store:false, até 3.000 tokens de saída, 30 mensagens recentes e até 48.000 caracteres de histórico. Nesta primeira entrega a resposta aparece quando concluída, com indicação de processamento; streaming de tokens ainda não foi implementado. Timeout de 24 segundos limita o trabalho posterior à resposta HTTP no Worker; pedidos longos podem exigir uma arquitetura de execução durável na próxima evolução. Cancelamento é persistido e tenta abortar a chamada em andamento; não garante devolução de consumo já ocorrido.
-
-## Dados e recuperação
-
-A exportação JSON autenticada preserva conversas, agentes associados, mensagens e datas. O original permanece no banco. Para restaurar, validar `format`, `version`, conteúdo e IDs; importar conversas e mensagens em transação sob o proprietário autenticado de destino, preservando a ordem das mensagens e remapeando conflitos de IDs. Não restaurar execuções antigas como ativas. A importação automatizada e backups agendados ainda não estão disponíveis; serão necessários antes de depender do Hub como única cópia de informações importantes.
-
-## Verificações
-
-Testes usam SQLite real em arquivo temporário e provedor substituto, sem chamadas pagas: autenticação, isolamento, persistência após reabrir banco, duplicação, nova tentativa, quota com rollback, concorrência, cancelamento, exportação, origem externa e contrato do provedor. Não equivalem a validação de resposta real do modelo.
-
-Prévia local verificada com envio, recarga e retomada de uma mensagem de teste, telas desktop e celular e seleção por WebMCP. O conteúdo de teste local não é enviado ao banco de produção.
-
-## Referências
-
-- https://developers.openai.com/api/docs/quickstart
-- https://github.com/remarkjs/react-markdown
-- https://github.com/remarkjs/remark-math
-
-## Validação de conexão — 17/09/2026
-
-A consulta autenticada de modelos retornou 200. O teste Responses e a nova tentativa da mensagem pendente no próprio Hub retornaram falta de créditos. A mensagem original permaneceu salva, sem duplicação nem resposta simulada. Os avisos distinguem saldo esgotado, cota, excesso temporário de pedidos, chave inválida e acesso ao modelo. A primeira versão privada foi publicada; novos commits precisam ser criados no PowerShell externo porque o Codex protege a pasta `.git`.
-# n8n production gateway
-
-The Hub can use the published Gabriel AI Hub n8n workflow as its server-side AI provider. Configure these runtime variables in the local `.env` or the hosted Site runtime settings:
-
-```text
-AI_PROVIDER=n8n
-N8N_WEBHOOK_URL=https://gaba061.app.n8n.cloud/webhook/gabriel-ai-hub
-N8N_WEBHOOK_SECRET=<optional shared secret>
-AI_DAILY_REQUEST_LIMIT=20
+```sh
+pnpm install --frozen-lockfile
+pnpm test
+pnpm typecheck
+pnpm exec eslint app lib db tests
+pnpm build
+pnpm dev
 ```
 
-The Hub sends `userId`, `agentId`, `conversationId`, `requestId`, the latest message, locale, timezone and attachment/memory placeholders to the webhook. The n8n response must include a non-empty `reply`; the backend keeps the local conversation history and uses `requestId` as the retry/idempotency key. Keep the webhook URL and secret in runtime configuration, never in client code.
+A CI executa instalação limpa, testes, tipos, lint e build. Fontes KaTeX e CSS local do shadcn acompanham o código para não depender de arquivos existentes apenas no computador de origem. Scripts antigos de instalação npm não são o caminho configurado em install:ci.
+
+Nesta retomada, testes funcionais e de renderização e TypeScript passaram. Lint: zero erros, um aviso preexistente pelo link local do CSS KaTeX no layout. O build local falhou por bloqueio de subprocessos (spawn EPERM) antes de carregar a configuração Vite; não foi possível validar a interface em navegador. Isso permanece pendente até execução em um ambiente compatível.
+
+## Acesso e banco
+
+O servidor valida a identidade encaminhada pela plataforma e HUB_OWNER_USER_ID. Sem proprietário configurado, o acesso falha fechado. Segredos ficam no runtime, nunca no navegador. O login simulado do starter serve apenas à prévia local; o Worker publicado depende da camada de autenticação do Sites.
+
+O esquema está em db/schema.ts e as migrações versionadas em drizzle/. A migração 0002_conversation_deletion adiciona deleted_at; precisa acompanhar a próxima versão antes de servir código que usa esse campo. Nenhuma migração foi aplicada à produção nesta retomada. No Sites, use o fluxo oficial que empacota e aplica migrações; na prévia, use Wrangler com a configuração gerada após build.
+
+## Provedores
+
+AI_PROVIDER aceita n8n, openai ou ollama. Uma escolha explícita com configuração incompleta desativa a IA; não troca silenciosamente de provedor. Sem provedor explícito, mantém-se compatibilidade com OpenAI quando chave e modelo estão configurados.
+
+- n8n: N8N_WEBHOOK_URL e, se configurado no workflow, N8N_WEBHOOK_SECRET.
+- OpenAI: OPENAI_API_KEY e OPENAI_MODEL, somente no servidor.
+- Ollama: OLLAMA_BASE_URL HTTP em localhost/127.0.0.1 e OLLAMA_MODEL. Requer um runtime com acesso a esse serviço; um Worker hospedado não acessa o Ollama do computador de Gabriel.
+- AI_DAILY_REQUEST_LIMIT: inteiro entre 1 e 500; conta tentativas iniciadas por dia UTC, incluindo falhas posteriores ao início.
+
+O webhook recebe userId, agentId, conversationId, requestId, mensagem mais recente, idioma, fuso e campos reservados para anexos/memória. A resposta deve conter reply não vazio. O Hub persiste seu próprio histórico; idempotência e memória dentro do n8n precisam ser verificadas no workflow exportado. Não envie testes ao webhook de produção para validar o código local.
+
+Respostas são exibidas ao concluir, sem streaming de tokens. Cancelamento tenta abortar a chamada e impede persistência tardia, mas não garante estorno do provedor. Exportação não inclui conversas apagadas. Importação automática e backups agendados seguem em preparação.
+
+## Evidência e histórico
+
+Os testes usam SQLite real e provedores substitutos: autenticação, proprietário, persistência, idempotência, cotas, concorrência, cancelamento, exclusão e suas corridas, exportação, origem externa, certificados, busca, configuração de provedor e renderização segura. Não realizam chamadas pagas nem comprovam geração real ou memória externa.
+
+Em 17/09/2026, um teste local OpenAI autenticou e retornou credit_balance_exhausted na geração. Esse registro é histórico e não representa o saldo atual. A produção atual usa configuração de gateway n8n.
+
+React/RSC 19.2.8 e Vite 8.0.16 incorporam correções publicadas nas fontes oficiais:
+- https://github.com/react/react/security/advisories/GHSA-wx67-qw84-cm4g
+- https://github.com/vitejs/vite/security/advisories/GHSA-fx2h-pf6j-xcff
+
+O registro durável de retomada está em docs/RETOMADA.md. Não armazenar credenciais, tokens de publicação, conteúdo privado de conversas ou exportações de banco no GitHub.

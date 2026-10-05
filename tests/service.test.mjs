@@ -60,5 +60,24 @@ let n8nWire;const routed=await respond({kind:'n8n',model:'n8n-router',webhookUrl
 assert.equal(routed.text,'Resposta do n8n');assert.equal(n8nWire.url,'https://n8n.example/webhook/gabriel-ai-hub');assert.equal(n8nWire.headers['X-Gabriel-Hub-Secret'],'test-secret');const n8nBody=JSON.parse(n8nWire.body);assert.equal(n8nBody.userId,'gabriel-test');assert.equal(n8nBody.conversationId,'conv-1');assert.equal(n8nBody.requestId,'req-1');assert.equal(n8nBody.agentId,'faculdade');
 const clarified=await respond({kind:'n8n',model:'n8n-router',webhookUrl:'https://n8n.example/webhook/gabriel-ai-hub'},'',[],new AbortController().signal,async()=>Response.json({conversationId:'conv-2',agentId:'clarify',reply:"A rota 'clarify' não é uma rota válida deste roteador.",memoryCandidates:[],citations:[],followUp:''}),{userId:'gabriel-test',agentId:'faculdade',conversationId:'conv-2',requestId:'req-2',message:'O que você faz?',userMemory:{},agentMemory:{},attachments:[],locale:'pt-BR',timezone:'America/Sao_Paulo'});
 assert.equal(clarified.text,'Posso ajudar com Faculdade, Concursos, IPE Trading ou Carreira & Tecnologia. Qual dessas áreas você quer usar?');
-console.log('PASS: contrato do provedor e falhas; nenhuma chamada real de IA');sql.close();
-
+console.log('PASS: contrato do provedor e falhas; nenhuma chamada real de IA');
+const chargedBefore=sql.prepare('SELECT SUM(charged_attempt) AS total FROM runs WHERE user_id=?').get(ctx.user).total;
+assert.equal((await request('conversations/'+id,'DELETE',{}, {user:'other'})).status,404);
+assert.equal((await request('conversations/'+id,'DELETE',{})).status,200);
+assert.equal((await request('conversations/'+id)).status,404);
+assert.ok(!(await request('conversations')).data.conversations.some(c=>c.id===id));
+const afterDeleteExport=(await request('export')).data;
+assert.ok(!afterDeleteExport.conversations.some(c=>c.id===id));
+assert.ok(!afterDeleteExport.messages.some(m=>m.conversation_id===id));
+assert.equal(sql.prepare('SELECT SUM(charged_attempt) AS total FROM runs WHERE user_id=?').get(ctx.user).total,chargedBefore);
+assert.equal(sql.prepare("SELECT COUNT(*) AS total FROM messages WHERE conversation_id=? AND content<>''").get(id).total,0);
+assert.equal((await request('conversations/'+id+'/messages','POST',first)).status,404);
+const racedDelete=await request('conversations/'+cancelledId,'DELETE',{}, {db:{...db,async batch(stmts){sql.prepare("UPDATE runs SET status='running' WHERE conversation_id=?").run(cancelledId);return db.batch(stmts);}}});
+assert.equal(racedDelete.status,409);
+assert.equal((await request('conversations/'+cancelledId)).data.messages[0].content,'Cancelar teste');
+sql.prepare("UPDATE runs SET status='cancelled' WHERE conversation_id=?").run(cancelledId);
+const racedId=crypto.randomUUID();await request('conversations','POST',{id:racedId,agentId:'faculdade'});
+const racedSend=await request('conversations/'+racedId+'/messages','POST',{key:crypto.randomUUID(),content:'Do not resurrect'}, {config:null,db:{...db,async batch(stmts){sql.prepare('UPDATE conversations SET deleted_at=? WHERE id=?').run(new Date().toISOString(),racedId);return db.batch(stmts);}}});
+assert.equal(racedSend.status,409);
+assert.equal(sql.prepare('SELECT COUNT(*) AS total FROM messages WHERE conversation_id=?').get(racedId).total,0);
+console.log('PASS: deletion isolates owner, removes content and preserves charged quota');sql.close();
